@@ -51,6 +51,7 @@ pub enum Link {
     Bridge,
     Loopback,
     Ethernet,
+    Virtual,
 }
 
 pub type AddressIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, IpAddr>>;
@@ -117,6 +118,8 @@ impl Iface {
                 Link::Tap
             } else if Self::is_tun(&ifname)? {
                 Link::Tun
+            } else if Self::is_virtual(&ifname)? {
+                Link::Virtual
             } else {
                 Link::Ethernet
             };
@@ -238,18 +241,28 @@ impl Iface {
 impl Iface {
     fn is_bridge(ifname: &str) -> Result<bool, IfError> {
         let ctl_fd = impls::new_control_socket()?;
-        let drv = impls::get_ethernet_driver(&ctl_fd, ifname)?;
-        Ok(drv.driver == "bridge")
+        match impls::get_ethernet_driver(&ctl_fd, ifname) {
+            Ok(drv) => Ok(drv.driver == "bridge"),
+            _ => Ok(false)
+        }
     }
     fn is_tun(ifname: &str) -> Result<bool, IfError> {
         let ctl_fd = impls::new_control_socket()?;
-        let drv = impls::get_ethernet_driver(&ctl_fd, ifname)?;
-        Ok(drv.driver == "tun" && drv.bus_info == "tun")
+        match impls::get_ethernet_driver(&ctl_fd, ifname) {
+            Ok(drv) => Ok(drv.driver == "tun" && drv.bus_info == "tun"),
+            _ => Ok(false)
+        }
     }
     fn is_tap(ifname: &str) -> Result<bool, IfError> {
         let ctl_fd = impls::new_control_socket()?;
-        let drv = impls::get_ethernet_driver(&ctl_fd, ifname)?;
-        Ok(drv.driver == "tun" && drv.bus_info == "tap")
+        match impls::get_ethernet_driver(&ctl_fd, ifname) {
+            Ok(drv) => Ok(drv.driver == "tun" && drv.bus_info == "tap"),
+            _ => Ok(false)
+        }
+    }
+    fn is_virtual(ifname: &str) -> Result<bool, IfError> {
+        let ctl_fd = impls::new_control_socket()?;
+        Ok(impls::get_ethernet_driver(&ctl_fd, ifname).is_err())
     }
 
     pub fn bind_to_device<S: std::os::unix::io::AsRawFd>(
